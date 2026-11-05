@@ -1,0 +1,10 @@
+{
+  "pomodoro-focus-app": {
+    "id": "pomodoro-focus-app",
+    "slug": "pomodoro-focus-app",
+    "title": "Pomodoro Focus App",
+    "content": "<h1>Pomodoro Timer Running Live</h1><p>Full-screen standalone app</p>",
+    "type": "html",
+    "updatedAt": 1793377372909
+  }
+}

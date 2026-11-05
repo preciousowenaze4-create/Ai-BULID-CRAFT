@@ -1,0 +1,10 @@
+{
+  "name": "Vercel AI Chatbot",
+  "description": "An open-source AI chatbot template featuring streaming conversations, interactive code and document artifacts, multimodal attachments, and customizable models.",
+  "requestFramePermissions": [
+    "CAMERA_AND_MICROPHONE"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
