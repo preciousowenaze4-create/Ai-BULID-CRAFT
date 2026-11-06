@@ -835,16 +835,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <span>Errors</span>
           </button>
 
-          {/* Button 5: Preview (Showroom / Canvas) */}
-          {onOpenPreview && (
+          {/* Button 5: Preview (Showroom / Canvas) - Strictly only when 100% compiled & ready */}
+          {!isLoading && hasArtifact && onOpenPreview && (
             <button
               type="button"
               onClick={onOpenPreview}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-neutral-200/90 hover:border-neutral-300 text-neutral-800 text-xs font-semibold shrink-0 transition-all active:scale-95 cursor-pointer shadow-xs hover:bg-neutral-50 touch-manipulation"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-neutral-200/90 hover:border-neutral-300 text-neutral-800 text-xs font-semibold shrink-0 transition-all active:scale-95 cursor-pointer shadow-xs hover:bg-neutral-50 touch-manipulation animate-in fade-in"
               title="Live App Preview"
             >
               <Play className="w-4 h-4 text-emerald-600 stroke-[1.8]" />
-              <span>Preview</span>
+              <span>Preview your app</span>
             </button>
           )}
         </div>

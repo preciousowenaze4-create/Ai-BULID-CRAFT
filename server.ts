@@ -1020,6 +1020,17 @@ CRITICAL RULE: When modifying or expanding this app based on user requests or up
       lastUserText.includes('three') ||
       lastUserText.includes('texture') ||
       lastUserText.includes('model') ||
+      lastUserText.includes('game') ||
+      lastUserText.includes('card') ||
+      lastUserText.includes('match') ||
+      lastUserText.includes('shop') ||
+      lastUserText.includes('store') ||
+      lastUserText.includes('dashboard') ||
+      lastUserText.includes('graphic') ||
+      lastUserText.includes('background') ||
+      lastUserText.includes('image') ||
+      lastUserText.includes('audio') ||
+      lastUserText.includes('music') ||
       lastUserText.includes('price');
 
     const config: any = {

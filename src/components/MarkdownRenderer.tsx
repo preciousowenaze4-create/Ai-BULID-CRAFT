@@ -70,12 +70,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 </div>
                 <div className="text-[11px] text-purple-600 dark:text-purple-400 flex items-center gap-1.5 font-medium mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping shrink-0" />
-                  <span className="truncate">Generating component & layout...</span>
+                  <span className="truncate">Generating component...</span>
                 </div>
               </div>
-            </div>
-            <div className="px-2.5 py-1 rounded-full bg-purple-100/80 dark:bg-purple-900/50 text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider shrink-0">
-              {language}
             </div>
           </div>
         );
@@ -137,8 +134,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   <div className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
                     {title}
                   </div>
-                  <div className="text-[11px] text-neutral-500 dark:text-neutral-400 capitalize">
-                    {type} • {language}
+                  <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                    Interactive Component • Ready
                   </div>
                 </div>
               </div>

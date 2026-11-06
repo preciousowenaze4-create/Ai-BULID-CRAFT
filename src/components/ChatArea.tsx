@@ -316,6 +316,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                     userPrompt={previousUserMsg?.content}
                     isOpenThinking={!!openThinkingIds[msg.id]}
                     onToggleThinking={() => toggleThinking(msg.id)}
+                    onOpenArtifact={onOpenArtifact}
                   />
                 )}
 
