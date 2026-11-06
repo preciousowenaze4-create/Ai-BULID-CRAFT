@@ -161,12 +161,19 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
     }
 
     if (!isFirstFileDone) {
-      return elapsed < 1.6 ? 'Thinking...' : `Building ${mainComponentName} Component`;
+      if (elapsed < 1.4) {
+        return 'Thinking...';
+      }
+      const content = messageContent || '';
+      if (content.length > 250) {
+        return `Coding ${mainComponentName}...`;
+      }
+      return `Building ${mainComponentName}...`;
     }
 
     // While second file is active
-    return 'Refining Connection Logic';
-  }, [isCompleted, isActuallyBuilding, isFirstFileDone, artifacts, mainComponentName, elapsed]);
+    return 'Connecting application logic...';
+  }, [isCompleted, isActuallyBuilding, isFirstFileDone, artifacts, mainComponentName, messageContent, elapsed]);
 
   // RULE 1: Conversational / Non-Build Messages (Greetings, Questions, Ideas)
   // MUST NEVER SHOW A BLANK WHITE BUBBLE! Always displays Gemini Star while thinking.
@@ -210,9 +217,9 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
 
   // RULE 2: Real-Time Build Output (When Building an Application or Component)
   return (
-    <div className="mb-3.5 space-y-2 text-xs animate-in fade-in duration-200">
-      {/* 1. Straight Line Status Header with Google Gemini Star Logo */}
-      <div className="flex items-center justify-between gap-3 px-1">
+    <div className="mb-3 space-y-1.5 text-xs animate-in fade-in duration-150">
+      {/* 1. Straight Line Status Header with Animated Spinning Star */}
+      <div className="flex items-center justify-between gap-3 px-1 py-0.5">
         <div className="flex items-center gap-2 min-w-0">
           <GeminiStarIcon isSpinning={!isCompleted} isCompleted={isCompleted} />
           <span className="font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight truncate text-[13px]">
@@ -238,22 +245,22 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
         )}
       </div>
 
-      {/* 2. Real-Time Build Output Files Card */}
+      {/* 2. Clean Inline Real-Time Build Steps (No Box / No Heavy Borders) */}
       {buildFiles.length > 0 && (
-        <div className="rounded-2xl border border-neutral-200/90 dark:border-neutral-800 bg-white dark:bg-neutral-900/90 shadow-xs px-4 py-3 space-y-2.5">
+        <div className="pt-0.5 pb-1 space-y-1 font-mono text-[12px] sm:text-[13px]">
           {buildFiles.map((file) => {
             const isDone = file.status === 'completed';
 
             return (
               <div
                 key={file.path}
-                className="flex items-center justify-between gap-3 font-mono text-[12px] sm:text-[13px] transition-all duration-300"
+                className="flex items-center justify-between gap-3 text-neutral-700 dark:text-neutral-300 py-0.5 px-1 animate-in fade-in duration-150"
               >
                 <span
                   className={`truncate ${
                     isDone
                       ? 'text-neutral-800 dark:text-neutral-200'
-                      : 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                      : 'text-blue-600 dark:text-blue-400 font-semibold'
                   }`}
                 >
                   {file.path}
@@ -261,13 +268,13 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
 
                 <div className="shrink-0 flex items-center">
                   {isDone ? (
-                    /* Blue circled checkmark matching user requirement */
+                    /* Clean inline blue circled checkmark */
                     <div className="w-4 h-4 rounded-full border border-blue-500 text-blue-600 dark:text-blue-400 flex items-center justify-center bg-blue-500/10">
                       <Check className="w-2.5 h-2.5 stroke-[3]" />
                     </div>
                   ) : (
                     /* Active animated spinner while building: NO premature checkmark! */
-                    <div className="w-4 h-4 rounded-full border-2 border-indigo-500/30 border-t-indigo-600 animate-spin" />
+                    <div className="w-4 h-4 rounded-full border-2 border-blue-500/30 border-t-blue-600 animate-spin" />
                   )}
                 </div>
               </div>
@@ -287,8 +294,8 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
 };
 
 /**
- * Google Gemini 4-Pointed Star Sparkle Icon with animated gradient ring
- * Matches the official Gemini / AI Studio branding
+ * Animated Google Gemini 4-Pointed Star Sparkle Icon
+ * Continuously rotates 360 degrees while active, never static or sleeping!
  */
 function GeminiStarIcon({
   isSpinning = false,
@@ -298,37 +305,11 @@ function GeminiStarIcon({
   isCompleted?: boolean;
 }) {
   return (
-    <div className="relative w-5 h-5 flex items-center justify-center shrink-0 select-none">
-      {/* Outer spinning gradient ring when active */}
-      {isSpinning && (
-        <svg
-          className="absolute inset-0 w-5 h-5 animate-spin"
-          viewBox="0 0 24 24"
-          fill="none"
-        >
-          <circle
-            cx="12"
-            cy="12"
-            r="9"
-            stroke="url(#geminiRingGradient)"
-            strokeWidth="2"
-            strokeDasharray="28 32"
-            strokeLinecap="round"
-          />
-          <defs>
-            <linearGradient id="geminiRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#4285F4" />
-              <stop offset="35%" stopColor="#9B51E0" />
-              <stop offset="70%" stopColor="#EA4335" />
-              <stop offset="100%" stopColor="#34A853" />
-            </linearGradient>
-          </defs>
-        </svg>
-      )}
-
-      {/* 4-pointed Gemini Star */}
+    <div className="relative w-4 h-4 flex items-center justify-center shrink-0 select-none">
+      {/* 4-pointed Gemini Star actively spinning 360° continuously when active */}
       <svg
-        className={`w-3.5 h-3.5 ${isSpinning ? 'scale-90 animate-pulse' : ''}`}
+        className={`w-3.5 h-3.5 ${isSpinning ? 'animate-spin' : ''}`}
+        style={{ animationDuration: '2.5s' }}
         viewBox="0 0 24 24"
         fill="url(#geminiStarGradient)"
       >
@@ -336,8 +317,8 @@ function GeminiStarIcon({
         <defs>
           <linearGradient id="geminiStarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#4285F4" />
-            <stop offset="40%" stopColor="#9B51E0" />
-            <stop offset="80%" stopColor="#EA4335" />
+            <stop offset="35%" stopColor="#9B51E0" />
+            <stop offset="70%" stopColor="#EA4335" />
             <stop offset="100%" stopColor="#FBBC05" />
           </linearGradient>
         </defs>

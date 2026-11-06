@@ -43,39 +43,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     return parts.map((part, index) => {
       if (!part) return null;
 
-      // Handle in-progress streaming artifact card
+      // In-progress artifact is tracked directly in real-time execution status line above
       const streamingMatch = part.match(/:::artifact-streaming\{([^}]*)\}/);
       if (streamingMatch) {
-        const attrString = streamingMatch[1];
-        const titleMatch = attrString.match(/title="([^"]*)"/);
-        const typeMatch = attrString.match(/type="([^"]*)"/);
-        const langMatch = attrString.match(/language="([^"]*)"/);
-
-        const title = titleMatch ? titleMatch[1] : 'Interactive Component';
-        const type = typeMatch ? typeMatch[1] : 'code';
-        const language = langMatch ? langMatch[1] : 'html';
-
-        return (
-          <div
-            key={index}
-            className="my-3 p-3.5 rounded-2xl border border-purple-200/90 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/30 shadow-xs flex items-center justify-between gap-4 animate-in fade-in"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-400 shrink-0">
-                <Loader2 className="w-4 h-4 animate-spin" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
-                  {title}
-                </div>
-                <div className="text-[11px] text-purple-600 dark:text-purple-400 flex items-center gap-1.5 font-medium mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping shrink-0" />
-                  <span className="truncate">Generating component...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
+        return null;
       }
 
       // Handle completed artifact preview card tag
