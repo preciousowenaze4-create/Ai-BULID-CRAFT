@@ -27,7 +27,7 @@ import {
   Database,
   Cpu,
 } from 'lucide-react';
-import { AuthUser } from '../types.ts';
+import { AuthUser, isOwnerEmail } from '../types.ts';
 import { TokenPurchaseModal } from './TokenPurchaseModal.tsx';
 
 interface ProfileScreenProps {
@@ -70,8 +70,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [rating, setRating] = useState(5);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
 
-  const userName = currentUser?.name || 'Precious Ddkid';
-  const userEmail = currentUser?.email || 'preciousddkid@gmail.com';
+  const isOwner = isOwnerEmail(currentUser?.email);
+  const userName = isOwner ? 'Precious' : currentUser?.name || 'Developer';
   const userInitial = (userName[0] || 'P').toUpperCase();
 
   const handleCopyInvite = () => {
@@ -124,11 +124,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <h2 className="text-lg sm:text-xl font-extrabold text-neutral-900 truncate">
                 {userName}
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                PRO
-              </span>
+              {isOwner ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-xs tracking-wide flex items-center gap-1">
+                  <Star className="w-2.5 h-2.5 fill-white" /> OWNER
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  PRO
+                </span>
+              )}
             </div>
-            <p className="text-xs text-neutral-500 truncate mt-0.5">{userEmail}</p>
+            {/* Strictly keep user email hidden from UI; display role status */}
+            <p className="text-xs text-neutral-500 truncate mt-0.5 font-medium">
+              {isOwner ? 'System Administrator & Lead Architect' : 'Verified Member Account'}
+            </p>
           </div>
         </div>
 

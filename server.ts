@@ -525,8 +525,9 @@ app.get('/api/models', (_req: Request, res: Response) => {
 // Paystack Payments & Token Purchase Endpoints
 // ==========================================
 
+const DEFAULT_PAYSTACK_TEST_KEY = 'pk_test_b8e210137ad2411082cebb1c43d83921b7123456';
 const PAYSTACK_SECRET_KEY = (process.env.PAYSTACK_SECRET_KEY || process.env.VITE_PAYSTACK_SECRET_KEY || '').trim();
-const PAYSTACK_PUBLIC_KEY = (process.env.PAYSTACK_PUBLIC_KEY || process.env.VITE_PAYSTACK_PUBLIC_KEY || '').trim();
+const PAYSTACK_PUBLIC_KEY = (process.env.PAYSTACK_PUBLIC_KEY || process.env.VITE_PAYSTACK_PUBLIC_KEY || DEFAULT_PAYSTACK_TEST_KEY).trim();
 
 // 1. Paystack Configuration
 app.get('/api/paystack/config', (_req: Request, res: Response) => {
@@ -539,14 +540,15 @@ app.get('/api/paystack/config', (_req: Request, res: Response) => {
 // 2. Initialize Paystack Transaction
 app.post('/api/paystack/initialize', async (req: Request, res: Response) => {
   try {
-    const { email, amount, tokens, tierId, userId } = req.body;
+    const { email, amount, tokens, tierId, userId, currency = 'NGN' } = req.body;
     if (!email || !amount) {
       res.status(400).json({ error: 'Email and amount are required' });
       return;
     }
 
+    const cleanEmail = String(email).trim().toLowerCase();
     const reference = `pstk_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const amountInKobo = Math.round(Number(amount) * 100);
+    const amountInSubunits = Math.round(Number(amount) * 100);
 
     if (PAYSTACK_SECRET_KEY) {
       const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -556,10 +558,10 @@ app.post('/api/paystack/initialize', async (req: Request, res: Response) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          amount: amountInKobo,
+          email: cleanEmail,
+          amount: amountInSubunits,
           reference,
-          currency: 'NGN',
+          currency: currency === 'USD' ? 'USD' : 'NGN',
           metadata: {
             userId: userId || '',
             tokens: Number(tokens) || 0,

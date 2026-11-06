@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   LogOut,
 } from 'lucide-react';
-import { ChatSession, AuthUser } from '../types.ts';
+import { ChatSession, AuthUser, isOwnerEmail } from '../types.ts';
 import { groupSessionsByDate } from '../lib/utils.ts';
 
 interface SidebarProps {
@@ -455,15 +455,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               />
             ) : (
               <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-[11px] shrink-0">
-                {(currentUser?.name || currentUser?.email || 'U')[0].toUpperCase()}
+                {(isOwnerEmail(currentUser?.email) ? 'P' : currentUser?.name || 'U')[0].toUpperCase()}
               </div>
             )}
             <div className="flex flex-col min-w-0 flex-1 pr-1">
-              <span className="font-semibold text-neutral-900 dark:text-neutral-100 text-[11px] truncate">
-                {currentUser?.name || currentUser?.email?.split('@')[0] || 'AI BuildCraft User'}
+              <span className="font-semibold text-neutral-900 dark:text-neutral-100 text-[11px] truncate flex items-center gap-1">
+                {isOwnerEmail(currentUser?.email) ? 'Precious' : currentUser?.name || 'AI BuildCraft User'}
+                {isOwnerEmail(currentUser?.email) && (
+                  <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    OWNER
+                  </span>
+                )}
               </span>
               <span className="text-[9px] text-neutral-400 truncate">
-                {currentUser?.email || 'Logged in'}
+                {isOwnerEmail(currentUser?.email) ? 'System Owner' : 'Verified Developer'}
               </span>
             </div>
           </button>

@@ -59,4 +59,31 @@ export interface AuthUser {
   name?: string;
   avatar?: string;
   provider?: 'google' | 'apple' | 'email' | 'supabase';
+  role?: 'owner' | 'admin' | 'user';
+  isOwner?: boolean;
 }
+
+/**
+ * Checks if the user is the application owner/admin (Preciousddkid@gmail.com or ddkidcast@gmail.com).
+ * Evaluated strictly in code logic to keep sensitive owner routing secure.
+ */
+export function isOwnerEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return clean === 'preciousddkid@gmail.com' || clean === 'ddkidcast@gmail.com';
+}
+
+/**
+ * Privacy helper to mask or conceal user emails in the frontend UI.
+ * Never outputs raw email addresses on screen.
+ */
+export function getMaskedUserEmail(email?: string | null): string {
+  if (!email) return 'Member Account';
+  if (isOwnerEmail(email)) return 'Verified Owner Account';
+  const clean = email.trim();
+  const [user, domain] = clean.split('@');
+  if (!domain || user.length <= 2) return '••••••@••••';
+  const visible = user.slice(0, 2);
+  return `${visible}••••@${domain.split('.')[0]}.com`;
+}
+

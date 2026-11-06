@@ -19,7 +19,7 @@ import {
   Rows3,
   GitBranch,
 } from 'lucide-react';
-import { AuthUser, ChatSession, Artifact } from '../types.ts';
+import { AuthUser, ChatSession, Artifact, getMaskedUserEmail } from '../types.ts';
 
 interface DatabaseModalProps {
   isOpen: boolean;
@@ -107,8 +107,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     if (currentUser?.id) {
       userRows.push({
         id: currentUser.id,
-        email: currentUser.email || 'user@example.com',
-        name: currentUser.name || (currentUser.email ? currentUser.email.split('@')[0] : 'Creator'),
+        email: getMaskedUserEmail(currentUser.email),
+        name: currentUser.name || 'Precious (Owner)',
         provider: currentUser.provider || 'email',
         role: 'owner',
         status: 'active',

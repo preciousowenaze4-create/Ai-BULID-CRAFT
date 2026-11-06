@@ -1,10 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2, AlertCircle, X } from 'lucide-react';
-import { AuthUser } from '../types.ts';
+import { AuthUser, isOwnerEmail } from '../types.ts';
 import { supabase } from '../lib/supabase.ts';
 
 interface AuthScreenProps {
   onAuthenticated: (user: AuthUser) => void;
+}
+
+function createAuthUserRecord(id: string, email: string, rawName?: string, rawAvatar?: string, provider: 'google' | 'apple' | 'email' = 'google'): AuthUser {
+  const isOwner = isOwnerEmail(email);
+  return {
+    id,
+    email: email.trim(),
+    name: isOwner ? 'Precious' : rawName || email.split('@')[0] || 'User',
+    avatar: rawAvatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(isOwner ? 'Precious' : email || 'user')}`,
+    provider,
+    role: isOwner ? 'owner' : 'user',
+    isOwner,
+  };
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
@@ -29,13 +42,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const u = session.user;
-        const user: AuthUser = {
-          id: u.id,
-          email: u.email || '',
-          name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User',
-          avatar: u.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.email || 'user')}`,
-          provider: 'google',
-        };
+        const user = createAuthUserRecord(
+          u.id,
+          u.email || '',
+          u.user_metadata?.full_name || u.user_metadata?.name,
+          u.user_metadata?.avatar_url,
+          'google'
+        );
         // Clean URL hash/search if OAuth tokens are present
         if (window.location.hash || window.location.search.includes('code=')) {
           window.history.replaceState(null, '', window.location.pathname);
@@ -50,13 +63,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
         console.error('Session check error:', sessionError.message);
       } else if (session?.user) {
         const u = session.user;
-        const user: AuthUser = {
-          id: u.id,
-          email: u.email || '',
-          name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User',
-          avatar: u.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.email || 'user')}`,
-          provider: 'google',
-        };
+        const user = createAuthUserRecord(
+          u.id,
+          u.email || '',
+          u.user_metadata?.full_name || u.user_metadata?.name,
+          u.user_metadata?.avatar_url,
+          'google'
+        );
         onAuthenticated(user);
       }
     });
@@ -129,13 +142,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
         if (error) throw error;
         if (data?.user) {
-          onAuthenticated({
-            id: data.user.id,
-            email: data.user.email || email.trim(),
-            name: data.user.user_metadata?.name || email.trim().split('@')[0],
-            avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(data.user.email || 'user')}`,
-            provider: 'email',
-          });
+          onAuthenticated(createAuthUserRecord(
+            data.user.id,
+            data.user.email || email.trim(),
+            data.user.user_metadata?.name || email.trim().split('@')[0],
+            undefined,
+            'email'
+          ));
           return;
         }
       } else {
@@ -146,13 +159,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
         if (error) throw error;
         if (data?.user) {
-          onAuthenticated({
-            id: data.user.id,
-            email: data.user.email || email.trim(),
-            name: data.user.user_metadata?.name || data.user.user_metadata?.full_name || email.trim().split('@')[0],
-            avatar: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(data.user.email || 'user')}`,
-            provider: 'email',
-          });
+          onAuthenticated(createAuthUserRecord(
+            data.user.id,
+            data.user.email || email.trim(),
+            data.user.user_metadata?.name || data.user.user_metadata?.full_name || email.trim().split('@')[0],
+            data.user.user_metadata?.avatar_url,
+            'email'
+          ));
           return;
         }
       }

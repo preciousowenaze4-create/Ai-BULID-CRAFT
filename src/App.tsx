@@ -12,7 +12,9 @@ import { AppsDashboard } from './components/AppsDashboard.tsx';
 import { ProfileScreen } from './components/ProfileScreen.tsx';
 import { AssetsModal } from './components/AssetsModal.tsx';
 import { ErrorsModal } from './components/ErrorsModal.tsx';
-import { ChatSession, Message, Artifact, Attachment, ModelOption, AuthUser } from './types.ts';
+import { TokenPurchaseModal } from './components/TokenPurchaseModal.tsx';
+import { ArrowRight, Play, Sparkles } from 'lucide-react';
+import { ChatSession, Message, Artifact, Attachment, ModelOption, AuthUser, isOwnerEmail } from './types.ts';
 import { extractArtifacts, isBuildOrCodeRequest } from './lib/utils.ts';
 import { loadUserSessions, saveUserSessions, createDefaultSession } from './lib/userSessions.ts';
 import { supabase } from './lib/supabase.ts';
@@ -48,7 +50,18 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USER);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email && isOwnerEmail(parsed.email)) {
+          return {
+            ...parsed,
+            role: 'owner',
+            name: 'Precious',
+            isOwner: true,
+          };
+        }
+        return parsed;
+      }
     } catch {}
     return null;
   });
@@ -56,8 +69,38 @@ export default function App() {
   // Supabase user_tokens live balance (default 500)
   const [userTokens, setUserTokens] = useState<number>(500);
 
+  // Instant Paystack Token Top-up Modal
+  const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+
+  // Token-exhaustion paused project state for instant seamless continuation
+  const [pausedBuildState, setPausedBuildState] = useState<{
+    sessionId: string;
+    userPrompt: string;
+    accumulatedText: string;
+    assistantMsgId: string;
+    timestamp: number;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('paused_build_state');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Floating network and connectivity notice
   const [toastNotice, setToastNotice] = useState<ToastNotice | null>(null);
+
+  // Sync token updates globally
+  useEffect(() => {
+    const handleTokensUpdated = (e: any) => {
+      if (e?.detail?.balance !== undefined) {
+        setUserTokens(e.detail.balance);
+      }
+    };
+    window.addEventListener('tokens-updated', handleTokensUpdated);
+    return () => window.removeEventListener('tokens-updated', handleTokensUpdated);
+  }, []);
 
   const [models, setModels] = useState<ModelOption[]>(DEFAULT_MODELS);
   const [currentModel, setCurrentModel] = useState<string>('gemini-3.8-flash');
@@ -386,6 +429,23 @@ export default function App() {
     setIsArtifactPanelOpen(false);
   };
 
+  // Resume build from exact point where token exhaustion paused it
+  const handleResumeBuild = async () => {
+    if (!pausedBuildState) return;
+    const paused = { ...pausedBuildState };
+    setPausedBuildState(null);
+    localStorage.removeItem('paused_build_state');
+
+    // Switch to target session if needed
+    if (paused.sessionId && paused.sessionId !== activeSessionId) {
+      setActiveSessionId(paused.sessionId);
+    }
+
+    // Seamless continuation prompt
+    const resumePrompt = `Continue generating the application seamlessly from the exact point where it was paused. Complete all remaining code, files, and components without restarting or repeating what was already built:`;
+    await handleSendMessage(resumePrompt);
+  };
+
   const handleSendMessage = async (
     content: string,
     attachments: Attachment[] = [],
@@ -404,17 +464,16 @@ export default function App() {
       return;
     }
 
-    // Check token balance from Supabase user_tokens table
-    if (currentUser?.id) {
-      if (userTokens <= 0) {
-        setToastNotice({
-          id: 'token-zero-' + Date.now(),
-          type: 'slow_network',
-          message: 'You have 0 tokens remaining. Please recharge in the Database panel to continue building.',
-          autoDismiss: 6000,
-        });
-        return;
-      }
+    // 4. Mandatory Token Gate: Verify token balance before processing any AI message or build request
+    if (userTokens <= 0) {
+      setIsTokenModalOpen(true);
+      setToastNotice({
+        id: 'token-zero-' + Date.now(),
+        type: 'slow_network',
+        message: 'Token balance is 0. Please top up with Paystack to continue building.',
+        autoDismiss: 6000,
+      });
+      return;
     }
 
     const userMsgId = 'msg-' + Date.now();
@@ -614,17 +673,59 @@ When an image or screenshot is provided, analyze it in the exact context of the 
                     currentLiveTokens = Math.max(0, currentLiveTokens - tokensToBurn);
                     setUserTokens(currentLiveTokens);
 
-                    // If tokens reach 0 right here:
+                    // 5. Token-Exhaustion Auto-Pause: If tokens run out mid-build
                     if (currentLiveTokens <= 0) {
                       tokensDepleted = true;
-                      syncUserTokenBalance(currentUser.id, 0);
+                      if (currentUser?.id) {
+                        syncUserTokenBalance(currentUser.id, 0);
+                      }
+                      setUserTokens(0);
+                      abortController.abort();
+
+                      // Auto-pause where it stopped without breaking or corrupting project state
+                      const partialSnapshot = accumulatedText;
+                      const { displayText: pDisplay, thinking: pThinking, artifacts: pArtifacts } = extractArtifacts(partialSnapshot);
+
+                      setSessions((prev) =>
+                        prev.map((s) => {
+                          if (s.id !== targetSessionId) return s;
+                          const msgs = s.messages.map((m) =>
+                            m.id === assistantMsgId
+                              ? {
+                                  ...m,
+                                  content: pDisplay,
+                                  thinking: pThinking || m.thinking,
+                                  artifacts: pArtifacts.length > 0 ? pArtifacts : undefined,
+                                }
+                              : m
+                          );
+                          const updated = { ...s, messages: msgs, updatedAt: Date.now() };
+                          if (currentUser?.id) {
+                            saveUserSessions(currentUser.id, [updated]).catch(() => {});
+                          }
+                          return updated;
+                        })
+                      );
+
+                      const pausedInfo = {
+                        sessionId: targetSessionId,
+                        userPrompt: content,
+                        accumulatedText: partialSnapshot,
+                        assistantMsgId,
+                        timestamp: Date.now(),
+                      };
+                      setPausedBuildState(pausedInfo);
+                      localStorage.setItem('paused_build_state', JSON.stringify(pausedInfo));
+
                       setToastNotice({
-                        id: 'token-zero-' + Date.now(),
+                        id: 'token-pause-' + Date.now(),
                         type: 'slow_network',
-                        message: 'Token balance finished. 0 tokens remaining in account.',
+                        message: 'Tokens exhausted! Build safely paused. Top up to resume seamlessly.',
                         autoDismiss: 6000,
                       });
-                      abortController.abort();
+
+                      // Automatically trigger payment modal so user can top up via Paystack
+                      setIsTokenModalOpen(true);
                       break;
                     }
 
@@ -1016,6 +1117,26 @@ When an image or screenshot is provided, analyze it in the exact context of the 
               }
             />
 
+            {/* Token-Exhaustion Auto-Pause & Corner "Continue" Button */}
+            {pausedBuildState && userTokens > 0 && (
+              <div className="absolute right-4 bottom-24 z-30 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <button
+                  type="button"
+                  onClick={handleResumeBuild}
+                  className="group flex items-center gap-2 px-4 py-2.5 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 font-extrabold text-xs sm:text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer border border-neutral-700/50 dark:border-neutral-200 ring-4 ring-indigo-500/20"
+                  title="Resume code generation from where it paused"
+                >
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Continue</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+            )}
+
             <ChatInput
               onSendMessage={handleSendMessage}
               isLoading={isCurrentSessionLoading}
@@ -1129,6 +1250,17 @@ When an image or screenshot is provided, analyze it in the exact context of the 
         runtimeErrors={runtimeErrors}
         onClearErrors={() => setRuntimeErrors([])}
         onDiagnoseWithAi={(prompt) => handleSendMessage(prompt, [], false)}
+      />
+
+      {/* Instant Paystack Token Top-Up Modal */}
+      <TokenPurchaseModal
+        isOpen={isTokenModalOpen}
+        onClose={() => setIsTokenModalOpen(false)}
+        currentUser={currentUser}
+        tokenBalance={userTokens}
+        onTokensUpdated={(newBal) => {
+          setUserTokens(newBal);
+        }}
       />
 
     </div>
