@@ -4,14 +4,15 @@ export interface UserTokenRecord {
   id?: string;
   created_at?: string;
   user_id: string;
-  token_balance: number;
+  count: number;
 }
 
 const DEFAULT_INITIAL_TOKENS = 500;
 
 /**
  * Fetch or initialize the user's token balance from the Supabase `user_tokens` table.
- * Defaults to 500 tokens if no record exists yet.
+ * Strictly respects 0 balance so users who finish their tokens stay at 0 even after
+ * logging out, logging back in, or reinstalling.
  */
 export async function getUserTokens(userId: string): Promise<number> {
   if (!userId) return DEFAULT_INITIAL_TOKENS;
@@ -21,48 +22,61 @@ export async function getUserTokens(userId: string): Promise<number> {
   try {
     const { data, error } = await supabase
       .from('user_tokens')
-      .select('token_balance')
+      .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (error) {
       console.warn('Supabase get user_tokens query note:', error.message);
       const cached = localStorage.getItem(storageKey);
-      return cached ? parseInt(cached, 10) : DEFAULT_INITIAL_TOKENS;
+      if (cached !== null) {
+        return parseInt(cached, 10);
+      }
+      return DEFAULT_INITIAL_TOKENS;
     }
 
-    if (data && typeof data.token_balance === 'number') {
-      localStorage.setItem(storageKey, String(data.token_balance));
-      return data.token_balance;
+    if (data) {
+      // Check column 'count' (user's Supabase schema) with fallback to 'token_balance'
+      const resolved = typeof data.count === 'number'
+        ? data.count
+        : typeof data.token_balance === 'number'
+        ? data.token_balance
+        : null;
+
+      if (resolved !== null) {
+        localStorage.setItem(storageKey, String(resolved));
+        return resolved;
+      }
     }
 
-    // No row found: initialize user in user_tokens table with default 500 tokens
+    // No row found for user: initialize new user in user_tokens table with default 500 tokens
     const { data: inserted, error: insertError } = await supabase
       .from('user_tokens')
       .insert({
         user_id: userId,
-        token_balance: DEFAULT_INITIAL_TOKENS,
+        count: DEFAULT_INITIAL_TOKENS,
       })
-      .select('token_balance')
+      .select('*')
       .single();
 
     if (insertError) {
       console.warn('Supabase insert user_tokens note:', insertError.message);
-      return DEFAULT_INITIAL_TOKENS;
+      const cached = localStorage.getItem(storageKey);
+      return cached !== null ? parseInt(cached, 10) : DEFAULT_INITIAL_TOKENS;
     }
 
-    const initial = inserted?.token_balance ?? DEFAULT_INITIAL_TOKENS;
+    const initial = inserted?.count ?? inserted?.token_balance ?? DEFAULT_INITIAL_TOKENS;
     localStorage.setItem(storageKey, String(initial));
     return initial;
   } catch (err) {
     console.warn('Error accessing user_tokens table:', err);
     const cached = localStorage.getItem(storageKey);
-    return cached ? parseInt(cached, 10) : DEFAULT_INITIAL_TOKENS;
+    return cached !== null ? parseInt(cached, 10) : DEFAULT_INITIAL_TOKENS;
   }
 }
 
 /**
- * Deduct tokens for the user and persist to the Supabase `user_tokens` table.
+ * Deduct tokens for the user and persist immediately to Supabase `user_tokens` table.
  */
 export async function deductUserTokens(userId: string, amount: number = 1): Promise<number> {
   if (!userId) return DEFAULT_INITIAL_TOKENS;
@@ -72,14 +86,10 @@ export async function deductUserTokens(userId: string, amount: number = 1): Prom
     const currentBalance = await getUserTokens(userId);
     const newBalance = Math.max(0, currentBalance - amount);
 
-    const { error } = await supabase
+    await supabase
       .from('user_tokens')
-      .update({ token_balance: newBalance })
+      .update({ count: newBalance })
       .eq('user_id', userId);
-
-    if (error) {
-      console.warn('Supabase update user_tokens note:', error.message);
-    }
 
     localStorage.setItem(storageKey, String(newBalance));
 
@@ -96,9 +106,38 @@ export async function deductUserTokens(userId: string, amount: number = 1): Prom
   } catch (err) {
     console.warn('Error updating user_tokens:', err);
     const cached = localStorage.getItem(storageKey);
-    const fallback = cached ? Math.max(0, parseInt(cached, 10) - amount) : DEFAULT_INITIAL_TOKENS;
+    const fallback = cached !== null ? Math.max(0, parseInt(cached, 10) - amount) : 0;
     localStorage.setItem(storageKey, String(fallback));
     return fallback;
+  }
+}
+
+/**
+ * Directly synchronize token balance to Supabase `user_tokens` table.
+ * Used during real-time streaming burning as the AI generates code fast.
+ */
+export async function syncUserTokenBalance(userId: string, balance: number): Promise<void> {
+  if (!userId) return;
+  const storageKey = `user_tokens_${userId}`;
+  const safeBalance = Math.max(0, Math.floor(balance));
+
+  localStorage.setItem(storageKey, String(safeBalance));
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('tokens-updated', {
+        detail: { userId, balance: safeBalance },
+      })
+    );
+  }
+
+  try {
+    await supabase
+      .from('user_tokens')
+      .update({ count: safeBalance })
+      .eq('user_id', userId);
+  } catch (err) {
+    console.warn('Supabase syncUserTokenBalance note:', err);
   }
 }
 
@@ -114,14 +153,10 @@ export async function addUserTokens(userId: string, amount: number): Promise<num
     const currentBalance = await getUserTokens(userId);
     const newBalance = currentBalance + amount;
 
-    const { error } = await supabase
+    await supabase
       .from('user_tokens')
-      .update({ token_balance: newBalance })
+      .update({ count: newBalance })
       .eq('user_id', userId);
-
-    if (error) {
-      console.warn('Supabase top-up user_tokens note:', error.message);
-    }
 
     localStorage.setItem(storageKey, String(newBalance));
 
@@ -137,7 +172,7 @@ export async function addUserTokens(userId: string, amount: number): Promise<num
   } catch (err) {
     console.warn('Error adding user_tokens:', err);
     const cached = localStorage.getItem(storageKey);
-    const fallback = (cached ? parseInt(cached, 10) : DEFAULT_INITIAL_TOKENS) + amount;
+    const fallback = (cached !== null ? parseInt(cached, 10) : DEFAULT_INITIAL_TOKENS) + amount;
     localStorage.setItem(storageKey, String(fallback));
     return fallback;
   }

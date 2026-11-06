@@ -646,18 +646,18 @@ app.post('/api/paystack/verify', async (req: Request, res: Response) => {
       try {
         const { data: currentRecord } = await supabase
           .from('user_tokens')
-          .select('token_balance')
+          .select('*')
           .eq('user_id', userId)
           .maybeSingle();
 
-        const currentBalance = currentRecord?.token_balance ?? 500;
+        const currentBalance = currentRecord?.count ?? currentRecord?.token_balance ?? 500;
         newBalance = currentBalance + tokensToCredit;
 
         await supabase
           .from('user_tokens')
           .upsert({
             user_id: userId,
-            token_balance: newBalance,
+            count: newBalance,
           });
 
         console.log(`✅ Supabase user_tokens updated for ${userId}: +${tokensToCredit} (Total: ${newBalance})`);
@@ -691,18 +691,18 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
       if (supabase && userId && tokensToAdd > 0) {
         const { data: currentRecord } = await supabase
           .from('user_tokens')
-          .select('token_balance')
+          .select('*')
           .eq('user_id', userId)
           .maybeSingle();
 
-        const currentBalance = currentRecord?.token_balance ?? 500;
+        const currentBalance = currentRecord?.count ?? currentRecord?.token_balance ?? 500;
         const newBalance = currentBalance + tokensToAdd;
 
         await supabase
           .from('user_tokens')
           .upsert({
             user_id: userId,
-            token_balance: newBalance,
+            count: newBalance,
           });
 
         console.log(`✅ Webhook credited ${tokensToAdd} tokens to user ${userId}`);
@@ -712,6 +712,66 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.warn('Paystack webhook error:', err);
     res.status(200).send('OK');
+  }
+});
+
+// ==========================================
+// Cross-Device User Sessions & Tokens API
+// Ensures projects and tokens persist across all browsers, PWA, and mobile home screen
+// ==========================================
+
+const SESSIONS_DATA_DIR = path.join(__dirname, '.data_sessions');
+if (!fs.existsSync(SESSIONS_DATA_DIR)) {
+  try {
+    fs.mkdirSync(SESSIONS_DATA_DIR, { recursive: true });
+  } catch {}
+}
+
+function getUserSessionFilePath(userId: string): string {
+  const safeId = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(SESSIONS_DATA_DIR, `user_${safeId}.json`);
+}
+
+// GET /api/user/sessions - Loads user's projects across any browser, mobile, or installed PWA
+app.get('/api/user/sessions', async (req: Request, res: Response) => {
+  const userId = String(req.query.userId || '').trim();
+  if (!userId) {
+    res.json({ sessions: [] });
+    return;
+  }
+
+  try {
+    const filePath = getUserSessionFilePath(userId);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const sessions = JSON.parse(raw);
+      if (Array.isArray(sessions)) {
+        res.json({ sessions });
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading saved user sessions file:', e);
+  }
+
+  res.json({ sessions: [] });
+});
+
+// POST /api/user/sessions - Immediately saves user projects to server storage
+app.post('/api/user/sessions', async (req: Request, res: Response) => {
+  const { userId, sessions } = req.body;
+  if (!userId || !Array.isArray(sessions)) {
+    res.status(400).json({ error: 'userId and sessions array required' });
+    return;
+  }
+
+  try {
+    const filePath = getUserSessionFilePath(userId);
+    fs.writeFileSync(filePath, JSON.stringify(sessions, null, 2), 'utf-8');
+    res.json({ success: true, count: sessions.length });
+  } catch (err: any) {
+    console.error('Failed to write user sessions file:', err);
+    res.status(500).json({ error: 'Failed to persist user sessions' });
   }
 });
 

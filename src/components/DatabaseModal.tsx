@@ -30,6 +30,7 @@ interface DatabaseModalProps {
   activeArtifact?: Artifact | null;
   targetPlatform?: 'mobile' | 'web';
   userId?: string;
+  tokenBalance?: number;
 }
 
 export interface ColumnSchema {
@@ -60,6 +61,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   activeSessionId,
   activeArtifact,
   targetPlatform = 'mobile',
+  tokenBalance,
 }) => {
   if (!isOpen) return null;
 
@@ -73,6 +75,32 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   // Synthesize real live application relational tables
   const tables: TableDefinition[] = useMemo(() => {
     const nowIso = new Date().toISOString();
+
+    // 0. Supabase user_tokens Table (Live user tokens)
+    const tokenRows: Record<string, any>[] = [];
+    const liveBalance = typeof tokenBalance === 'number' ? tokenBalance : 500;
+    if (currentUser?.id) {
+      tokenRows.push({
+        id: 'tok_' + currentUser.id.slice(0, 12),
+        user_id: currentUser.id,
+        count: liveBalance,
+        created_at: '2026-10-15T09:30:00Z',
+      });
+    } else {
+      tokenRows.push({
+        id: 'tok_guest_01',
+        user_id: 'usr_guest_01',
+        count: liveBalance,
+        created_at: nowIso,
+      });
+    }
+
+    const tokenColumns: ColumnSchema[] = [
+      { name: 'id', type: 'UUID', isPrimary: true, nullable: false, description: 'Primary token record key' },
+      { name: 'user_id', type: 'UUID', isForeign: true, references: 'users.id', nullable: false, description: 'Authenticated user identifier' },
+      { name: 'count', type: 'INT4', nullable: false, defaultValue: '500', description: 'Real-time remaining token balance' },
+      { name: 'created_at', type: 'TIMESTAMPTZ', nullable: false, defaultValue: 'NOW()', description: 'Token allocation timestamp' },
+    ];
 
     // 1. Users Table
     const userRows: Record<string, any>[] = [];
@@ -340,6 +368,14 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     ];
 
     return [
+      {
+        name: 'user_tokens',
+        label: 'user_tokens',
+        description: 'Supabase persistent user token balances with real-time balance tracking',
+        columns: tokenColumns,
+        rows: tokenRows,
+        relationships: [{ foreignKey: 'user_id', targetTable: 'users', targetColumn: 'id', relationType: 'N:1' }],
+      },
       {
         name: 'users',
         label: 'users',

@@ -21,7 +21,8 @@ export function createDefaultSession(model: string = 'gemini-3.8-flash'): ChatSe
 
 /**
  * Load user's private sessions scoped strictly to their user ID.
- * Guarantees a clean dashboard for new or separate user accounts.
+ * Synchronizes with local storage, persistent server endpoint, and Supabase.
+ * Guarantees cross-device, cross-browser, and installed PWA/home-screen access.
  */
 export async function loadUserSessions(userId: string, defaultModel: string = 'gemini-3.8-flash'): Promise<ChatSession[]> {
   const localKey = getUserStorageKey(userId);
@@ -36,7 +37,37 @@ export async function loadUserSessions(userId: string, defaultModel: string = 'g
     console.warn('Error reading local user sessions:', e);
   }
 
-  // Attempt to sync from Supabase if table exists
+  // 1. Fetch from persistent cross-device server storage
+  try {
+    const sRes = await fetch(`/api/user/sessions?userId=${encodeURIComponent(userId)}`);
+    if (sRes.ok) {
+      const data = await sRes.json();
+      if (data && Array.isArray(data.sessions) && data.sessions.length > 0) {
+        // Merge server sessions with local sessions, preferring newer/richer
+        const mergedMap = new Map<string, ChatSession>();
+        for (const s of data.sessions) {
+          if (s?.id) mergedMap.set(s.id, s);
+        }
+        for (const s of localSessions) {
+          if (s?.id) {
+            const existing = mergedMap.get(s.id);
+            if (!existing || (s.messages && s.messages.length >= (existing.messages?.length || 0))) {
+              mergedMap.set(s.id, s);
+            }
+          }
+        }
+        const mergedList = Array.from(mergedMap.values()).sort(
+          (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+        );
+        localStorage.setItem(localKey, JSON.stringify(mergedList));
+        return mergedList;
+      }
+    }
+  } catch (err) {
+    console.warn('Server session fetch note:', err);
+  }
+
+  // 2. Attempt to sync from Supabase if table exists
   try {
     const { data, error } = await supabase
       .from('chat_sessions')
@@ -51,9 +82,7 @@ export async function loadUserSessions(userId: string, defaultModel: string = 'g
         return remoteSessions;
       }
     }
-  } catch {
-    // Table may not exist yet in schema cache, fallback to local storage
-  }
+  } catch {}
 
   if (localSessions.length > 0) {
     return localSessions;
@@ -66,7 +95,7 @@ export async function loadUserSessions(userId: string, defaultModel: string = 'g
 }
 
 /**
- * Persist user's sessions to local scoped storage and sync with Supabase
+ * Persist user's sessions immediately to local storage, server endpoint, and Supabase
  */
 export async function saveUserSessions(userId: string, sessions: ChatSession[]): Promise<void> {
   const localKey = getUserStorageKey(userId);
@@ -75,6 +104,15 @@ export async function saveUserSessions(userId: string, sessions: ChatSession[]):
   } catch (e) {
     console.warn('Failed to save user sessions to local storage:', e);
   }
+
+  // Immediately persist to cross-device server storage
+  try {
+    fetch('/api/user/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, sessions }),
+    }).catch(() => {});
+  } catch {}
 
   // Attempt Supabase upsert in background
   try {

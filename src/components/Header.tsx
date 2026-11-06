@@ -48,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNewChat,
   onOpenSettings,
   onOpenDatabase,
+  tokenBalance,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -97,8 +98,26 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Top-Right: Canvas Preview Toggle + More Options '...' */}
-          <div className="flex items-center gap-1 relative" ref={menuRef}>
+          {/* Top-Right: Live Token Counter + Canvas Preview Toggle + More Options '...' */}
+          <div className="flex items-center gap-1.5 relative" ref={menuRef}>
+            {typeof tokenBalance === 'number' && (
+              <button
+                type="button"
+                onClick={onOpenDatabase}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold font-mono transition-all active:scale-95 cursor-pointer ${
+                  tokenBalance <= 0
+                    ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                    : tokenBalance <= 50
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
+                }`}
+                title="Supabase live token balance • Click to manage"
+              >
+                <span className={tokenBalance > 0 ? 'text-amber-500' : 'text-rose-500'}>⚡</span>
+                <span>{tokenBalance}</span>
+              </button>
+            )}
+
             {hasArtifact && onToggleArtifactPanel && (
               <button
                 type="button"
@@ -208,8 +227,26 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {/* Right: Quick Profile / Menu access if needed */}
+          {/* Right: Live Token Counter & Quick Profile / Canvas toggle */}
           <div className="flex items-center gap-2">
+            {typeof tokenBalance === 'number' && (
+              <button
+                type="button"
+                onClick={onOpenDatabase}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer ${
+                  tokenBalance <= 0
+                    ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                    : tokenBalance <= 50
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
+                }`}
+                title="Supabase live token balance • Click to manage"
+              >
+                <span className={tokenBalance > 0 ? 'text-amber-500' : 'text-rose-500'}>⚡</span>
+                <span>{tokenBalance} tokens</span>
+              </button>
+            )}
+
             {hasArtifact && onToggleArtifactPanel && (
               <button
                 type="button"

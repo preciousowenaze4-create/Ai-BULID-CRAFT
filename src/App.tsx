@@ -16,7 +16,7 @@ import { ChatSession, Message, Artifact, Attachment, ModelOption, AuthUser } fro
 import { extractArtifacts, isBuildOrCodeRequest } from './lib/utils.ts';
 import { loadUserSessions, saveUserSessions, createDefaultSession } from './lib/userSessions.ts';
 import { supabase } from './lib/supabase.ts';
-import { getUserTokens, deductUserTokens, ensureUserRecord } from './lib/tokens.ts';
+import { getUserTokens, deductUserTokens, syncUserTokenBalance, ensureUserRecord } from './lib/tokens.ts';
 import { NetworkToast, ToastNotice } from './components/NetworkToast.tsx';
 import confetti from 'canvas-confetti';
 
@@ -407,13 +407,14 @@ export default function App() {
     // Check token balance from Supabase user_tokens table
     if (currentUser?.id) {
       if (userTokens <= 0) {
-        alert('You have 0 tokens remaining in your account. Please check your Database panel or contact support.');
+        setToastNotice({
+          id: 'token-zero-' + Date.now(),
+          type: 'slow_network',
+          message: 'You have 0 tokens remaining. Please recharge in the Database panel to continue building.',
+          autoDismiss: 6000,
+        });
         return;
       }
-      // Deduct 1 token immediately against Supabase user_tokens table
-      deductUserTokens(currentUser.id, 1).then((newBal) => {
-        setUserTokens(newBal);
-      });
     }
 
     const userMsgId = 'msg-' + Date.now();
@@ -586,6 +587,9 @@ When an image or screenshot is provided, analyze it in the exact context of the 
 
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
+        let currentLiveTokens = userTokens;
+        let lastTokenSyncTime = Date.now();
+        let tokensDepleted = false;
 
         while (true) {
           const { value, done } = await reader.read();
@@ -603,6 +607,34 @@ When an image or screenshot is provided, analyze it in the exact context of the 
                 const data = JSON.parse(dataStr);
                 if (data.text) {
                   accumulatedText += data.text;
+
+                  // Real-time token consumption as the AI builds code and components
+                  if (currentUser?.id && currentLiveTokens > 0) {
+                    const tokensToBurn = Math.max(1, Math.floor(data.text.length / 75));
+                    currentLiveTokens = Math.max(0, currentLiveTokens - tokensToBurn);
+                    setUserTokens(currentLiveTokens);
+
+                    // If tokens reach 0 right here:
+                    if (currentLiveTokens <= 0) {
+                      tokensDepleted = true;
+                      syncUserTokenBalance(currentUser.id, 0);
+                      setToastNotice({
+                        id: 'token-zero-' + Date.now(),
+                        type: 'slow_network',
+                        message: 'Token balance finished. 0 tokens remaining in account.',
+                        autoDismiss: 6000,
+                      });
+                      abortController.abort();
+                      break;
+                    }
+
+                    // Periodically sync live balance to Supabase user_tokens table
+                    if (Date.now() - lastTokenSyncTime > 1500) {
+                      lastTokenSyncTime = Date.now();
+                      syncUserTokenBalance(currentUser.id, currentLiveTokens);
+                    }
+                  }
+
                   const { displayText: liveText, thinking: liveThinking } = extractArtifacts(accumulatedText);
                   // Live update assistant message
                   setSessions((prev) =>
@@ -649,6 +681,15 @@ When an image or screenshot is provided, analyze it in the exact context of the 
               }
             }
           }
+
+          if (tokensDepleted) {
+            break;
+          }
+        }
+
+        // Final sync of exact token balance to Supabase user_tokens table
+        if (currentUser?.id) {
+          syncUserTokenBalance(currentUser.id, currentLiveTokens);
         }
       }
 
@@ -1071,6 +1112,7 @@ When an image or screenshot is provided, analyze it in the exact context of the 
         activeArtifact={activeArtifact}
         targetPlatform={targetPlatform}
         userId={currentUser?.id}
+        tokenBalance={userTokens}
       />
 
       {/* Project Assets Modal ([ 🖼️ Assets ] Toolbar Button) */}
