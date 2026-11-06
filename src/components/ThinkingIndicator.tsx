@@ -141,10 +141,19 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
     return list;
   }, [isBuildRequest, mainComponentName, isFirstFileDone, isCompleted]);
 
+  // Check if this turn is actually building an application or code
+  const isActuallyBuilding = useMemo(() => {
+    if (isBuildRequest) return true;
+    const content = messageContent || '';
+    if (artifacts && artifacts.length > 0) return true;
+    if (content.includes(':::artifact') || content.includes('```')) return true;
+    return false;
+  }, [isBuildRequest, messageContent, artifacts]);
+
   // Dynamic Status Headline (matching authentic Gemini AI Studio state)
   const statusHeadline = useMemo(() => {
     if (isCompleted) {
-      if (isBuildRequest) {
+      if (isActuallyBuilding) {
         const title = artifacts[0]?.title || mainComponentName;
         return `Built ${title}`;
       }
@@ -152,15 +161,29 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
     }
 
     if (!isFirstFileDone) {
-      return elapsed < 1.8 ? 'Thinking...' : `Building ${mainComponentName} Component`;
+      return elapsed < 1.6 ? 'Thinking...' : `Building ${mainComponentName} Component`;
     }
 
     // While second file is active
     return 'Refining Connection Logic';
-  }, [isCompleted, isBuildRequest, isFirstFileDone, artifacts, mainComponentName, elapsed]);
+  }, [isCompleted, isActuallyBuilding, isFirstFileDone, artifacts, mainComponentName, elapsed]);
 
-  // RULE 1: Conversational / Non-Build Messages
-  if (!isBuildRequest) {
+  // RULE 1: Conversational / Non-Build Messages (Greetings, Questions, Ideas)
+  // MUST NEVER SHOW A BLANK WHITE BUBBLE! Always displays Gemini Star while thinking.
+  if (!isActuallyBuilding) {
+    if (isLoading && isLast) {
+      return (
+        <div className="flex items-center gap-2 py-1 px-1 mb-1 text-neutral-800 dark:text-neutral-200 animate-in fade-in duration-150">
+          <GeminiStarIcon isSpinning={true} />
+          <span className="font-semibold tracking-tight text-[13px] text-neutral-900 dark:text-neutral-100">
+            Thinking...
+          </span>
+          <span className="text-[11px] text-neutral-400 font-mono">• {elapsed.toFixed(1)}s</span>
+        </div>
+      );
+    }
+
+    // After completion: if reasoning text was produced, offer clean collapsible drawer
     if (thinkingText) {
       return (
         <div className="mb-2">
@@ -170,7 +193,7 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
             className="inline-flex items-center gap-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 text-[11px] font-medium transition-colors cursor-pointer"
           >
             <Brain className="w-3.5 h-3.5 text-indigo-500" />
-            <span>{isOpenThinking ? 'Hide thinking' : 'View reasoning'}</span>
+            <span>{isOpenThinking ? 'Hide thinking' : `Thought for ${thinkingTime ? thinkingTime + 's' : elapsed.toFixed(1) + 's'}`}</span>
             {isOpenThinking ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {isOpenThinking && (
@@ -181,11 +204,11 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
         </div>
       );
     }
+
     return null;
   }
 
-
-  // RULE 3: Real-Time Build Output (Matching IMG_5064 Exactly)
+  // RULE 2: Real-Time Build Output (When Building an Application or Component)
   return (
     <div className="mb-3.5 space-y-2 text-xs animate-in fade-in duration-200">
       {/* 1. Straight Line Status Header with Google Gemini Star Logo */}
@@ -215,7 +238,7 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
         )}
       </div>
 
-      {/* 2. Real-Time Build Output Files Card (Matching IMG_5064 Box Exactly) */}
+      {/* 2. Real-Time Build Output Files Card */}
       {buildFiles.length > 0 && (
         <div className="rounded-2xl border border-neutral-200/90 dark:border-neutral-800 bg-white dark:bg-neutral-900/90 shadow-xs px-4 py-3 space-y-2.5">
           {buildFiles.map((file) => {
@@ -238,8 +261,8 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
 
                 <div className="shrink-0 flex items-center">
                   {isDone ? (
-                    /* Green circled checkmark exactly as in IMG_5064 */
-                    <div className="w-4 h-4 rounded-full border border-emerald-500 text-emerald-600 dark:text-emerald-400 flex items-center justify-center bg-emerald-500/10">
+                    /* Blue circled checkmark matching user requirement */
+                    <div className="w-4 h-4 rounded-full border border-blue-500 text-blue-600 dark:text-blue-400 flex items-center justify-center bg-blue-500/10">
                       <Check className="w-2.5 h-2.5 stroke-[3]" />
                     </div>
                   ) : (
